@@ -1,0 +1,13 @@
+node_modules/
+main.js
+*.map
+*.zip
+*.log
+.env
+.env.*
+.obsidian/
+data.json
+.DS_Store
+Thumbs.db
+tmp/
+temp/

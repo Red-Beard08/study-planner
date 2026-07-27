@@ -1,0 +1,9 @@
+{
+  "id": "study-planner",
+  "name": "Study Planner",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Plan seasons, lessons, teachers, goals, and attendance for a men's Bible study.",
+  "author": "Corthon",
+  "isDesktopOnly": false
+}

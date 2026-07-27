@@ -1,0 +1,25 @@
+{
+  "name": "study-planner",
+  "version": "1.0.0",
+  "description": "Markdown-first planning, lessons, goals, teachers, and attendance for an Obsidian men's Bible study.",
+  "main": "main.js",
+  "scripts": {
+    "build": "node esbuild.config.mjs production",
+    "typecheck": "tsc --noEmit",
+    "test:portability": "node scripts/validate-portability.mjs",
+    "test": "npm run typecheck && npm run build && node scripts/test-recurrence.mjs && node scripts/validate-build.mjs && npm run test:portability"
+  },
+  "keywords": ["obsidian", "bible-study", "mens-ministry", "markdown"],
+  "author": "Corthon",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "builtin-modules": "^4.0.0",
+    "esbuild": "^0.25.0",
+    "obsidian": "latest",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,6 +1,6 @@
 # Study Planner
 
-Study Planner is a Markdown-first Obsidian plugin for running a men's Bible study across multiple seasons. It plans recurring and one-off lessons, assigns teachers, tracks season goals, manages members, and records attendance without Dataview or an external service.
+Study Planner is a Markdown-first Obsidian plugin for running a Bible study across multiple seasons. It plans recurring and one-off lessons, assigns teachers, tracks season goals, manages members, and records attendance without Dataview or an external service.
 
 Version `1.0.0` is the first public beta. Test with sample data before adopting it for an established study.
 

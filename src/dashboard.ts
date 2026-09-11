@@ -28,7 +28,8 @@ export class StudyDashboardView extends ItemView {
     this.button(globalActions, "Add member", () => this.plugin.openMember());
     this.button(globalActions, "Manage members", () => this.plugin.openMemberManager());
     this.button(globalActions, "Members report", () => void this.plugin.openMembersReport());
-    this.button(globalActions, "Add teacher", () => this.plugin.openTeacher());
+    this.button(globalActions, "Add leader", () => this.plugin.openTeacher());
+    this.button(globalActions, "Manage leaders", () => this.plugin.openTeacherManager());
 
     root.createEl("h2", { text: "Seasons" });
     const seasonGrid = root.createDiv({ cls: "study-planner-grid study-planner-season-grid" });
@@ -53,16 +54,7 @@ export class StudyDashboardView extends ItemView {
       if (!recentEvents.length) attendance.createEl("span", { text: "No completed events", cls: "study-planner-muted" });
       const actions = row.createDiv({ cls: "study-planner-actions study-planner-member-actions" }); this.button(actions, "Edit details", () => this.plugin.openMemberEditor(member)); this.button(actions, "See more", () => void this.plugin.openFile(member.path));
     }
-    const reportRows = this.plugin.repository.getMemberReport().filter(row => row.status === "active");
-    if (reportRows.length) {
-      root.createEl("h3", { text: "Overall attendance" });
-      const chart = root.createDiv({ cls: "study-planner-report-chart" }); const max = Math.max(1, ...reportRows.map(row => row.attendanceCount));
-      for (const row of reportRows) {
-        const graphRow = chart.createDiv({ cls: "study-planner-report-chart-row" }); graphRow.createEl("span", { text: row.name, cls: "study-planner-report-label" });
-        graphRow.createEl("progress", { cls: "study-planner-report-progress", attr: { max: String(max), value: String(row.attendanceCount) } });
-        graphRow.createEl("strong", { text: String(row.attendanceCount) });
-      }
-    }
+    if (overview.season) this.attendanceByEvent(root, overview.season, overview.meetings, activeMembers.length);
 
     if (!this.selectedSeasonId) {
       const prompt = root.createDiv({ cls: "study-planner-empty study-planner-season-prompt" });
@@ -87,7 +79,7 @@ export class StudyDashboardView extends ItemView {
     this.button(actions, "Create specific event/lesson", () => this.plugin.openMeeting(todayIso(), season.id, "specific"));
     this.button(actions, "Add goal", () => this.plugin.openGoal(season.id));
     this.button(actions, "Manage goals", () => this.plugin.openGoalManager(season.id));
-    this.button(actions, "Open season plan", () => void this.plugin.openFile(season.planPath));
+    this.button(actions, "Refresh & open season plan", () => void this.plugin.openSeasonPlan(season.id));
 
     const metrics = detail.createDiv({ cls: "study-planner-metrics" });
     this.metric(metrics, String(summary.members.filter(item => item.status === "active").length), "Active members");
@@ -101,6 +93,9 @@ export class StudyDashboardView extends ItemView {
     const recurringDates = scheduledDates(season.startDate, season.endDate, season.recurrence, season.weekday);
     const specificCount = summary.meetings.filter(meeting => meeting.scheduleKind === "specific").length;
     this.metric(metrics, String(recurringDates.length + specificCount), "Calendar events");
+    const goalPanel = detail.createDiv({ cls: "study-planner-goal-panel" }); goalPanel.createEl("h3", { text: "Season goals" });
+    if (!summary.goals.length) goalPanel.createEl("p", { text: "No season goals yet.", cls: "study-planner-muted" });
+    for (const goal of summary.goals) { const row = goalPanel.createDiv({ cls: "study-planner-goal-row" }); row.createEl("strong", { text: goal.title }); row.createEl("span", { text: `${goal.status}${goal.focusAreas.length ? ` · ${goal.focusAreas.join(", ")}` : ""}`, cls: "study-planner-muted" }); const linked = summary.meetings.filter(meeting => meeting.goals.includes(goal.id)).length; row.createEl("small", { text: `${linked} linked lesson${linked === 1 ? "" : "s"}` }); this.button(row, "Open goal", () => void this.plugin.openGoalProfile(goal)); }
     this.seasonCalendar(detail, season, recurringDates, summary.meetings);
   }
 
@@ -111,7 +106,29 @@ export class StudyDashboardView extends ItemView {
     card.createEl("p", { text: recurrenceLabel(season.recurrence, season.weekday) });
     const actions = card.createDiv({ cls: "study-planner-actions" });
     this.button(actions, "Open season dashboard", () => { this.selectedSeasonId = season.id; void this.render(); });
-    this.button(actions, "Open plan note", () => void this.plugin.openFile(season.planPath));
+    this.button(actions, "Refresh & open plan", () => void this.plugin.openSeasonPlan(season.id));
+  }
+
+  private attendanceByEvent(root: HTMLElement, season: SeasonRecord, meetings: MeetingRecord[], activeMemberCount: number): void {
+    const recurringDates = scheduledDates(season.startDate, season.endDate, season.recurrence, season.weekday);
+    const recurring = recurringDates.map(date => meetings.find(meeting => meeting.scheduleKind === "recurring" && (meeting.originalDate || meeting.date) === date)).map((meeting, index) => ({ date: recurringDates[index], meeting }));
+    const specific = meetings.filter(meeting => meeting.scheduleKind === "specific").map(meeting => ({ date: meeting.date, meeting }));
+    const events = [...recurring, ...specific].sort((a, b) => a.date.localeCompare(b.date));
+    root.createEl("h3", { text: `Overall attendance · ${season.name}` });
+    const intro = root.createEl("p", { cls: "study-planner-muted", text: `${events.length} scheduled events in this season. Each bar shows people present for that event.` });
+    intro.setAttr("aria-live", "polite");
+    const chart = root.createDiv({ cls: "study-planner-report-chart study-planner-event-attendance-chart" });
+    if (!events.length) { chart.createEl("span", { text: "No scheduled events fall within this season.", cls: "study-planner-muted" }); return; }
+    const denominator = Math.max(1, activeMemberCount, ...events.map(item => Object.keys(item.meeting?.attendance ?? {}).length));
+    for (const item of events) {
+      const present = Object.values(item.meeting?.attendance ?? {}).filter(status => status === "present").length;
+      const recorded = Object.keys(item.meeting?.attendance ?? {}).length;
+      const date = new Date(`${item.date}T12:00:00`); const label = Number.isNaN(date.valueOf()) ? item.date : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      const row = chart.createDiv({ cls: "study-planner-report-chart-row study-planner-event-attendance-row" });
+      const details = row.createDiv({ cls: "study-planner-report-event-details" }); details.createEl("span", { text: label, cls: "study-planner-report-label" }); details.createEl("small", { text: item.meeting?.title || (item.meeting ? "Bible Study" : "Not yet planned") });
+      row.createEl("progress", { cls: "study-planner-report-progress", attr: { max: String(denominator), value: String(present), title: `${present} present${recorded ? ` · ${recorded} recorded` : ""}` } });
+      row.createEl("strong", { text: `${present}/${activeMemberCount || recorded || 0}` });
+    }
   }
 
   private seasonCalendar(root: HTMLElement, season: SeasonRecord, recurringDates: string[], meetings: MeetingRecord[]): void {

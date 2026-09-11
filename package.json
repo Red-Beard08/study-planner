@@ -10,7 +10,7 @@
     "test": "npm run typecheck && npm run build && node scripts/test-recurrence.mjs && node scripts/validate-build.mjs && npm run test:portability"
   },
   "keywords": ["obsidian", "bible-study", "mens-ministry", "markdown"],
-  "author": "Corthon",
+  "author": "Red-Beard",
   "license": "MIT",
   "engines": {
     "node": ">=18"

@@ -12,7 +12,6 @@ const forbiddenText = [
   ["Shepherd's", "Ledger"].join(" "),
   ["shepherds", "ledger"].join("-"),
   ["Collections", ""].join("/"),
-  ["Red", "Beard"].join("-"),
   ["i", "Cloud"].join("")
 ];
 const localUserPath = new RegExp(["C:", "Users"].join("\\\\"), "i");

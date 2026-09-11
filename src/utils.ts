@@ -15,6 +15,16 @@ export function safeName(value: string): string {
   return value.trim().replace(/[\\/:*?"<>|#[\]]/g, "-").replace(/\s+/g, " ").slice(0, 90) || "Untitled";
 }
 
+export function nameKey(value: string): string { return value.trim().replace(/\s+/g, " ").toLocaleLowerCase(); }
+
+export function normalizedLabels(values: string[]): string[] {
+  const seen = new Set<string>(); const result: string[] = [];
+  for (const value of values) { const label = value.trim().replace(/\s+/g, " "); const key = nameKey(label); if (key && !seen.has(key)) { seen.add(key); result.push(label); } }
+  return result.sort((a, b) => a.localeCompare(b));
+}
+
+export function displayWikilink(value: string): string { const match = /^\[\[.*?\|([^\]]+)\]\]$/.exec(value.trim()); return match?.[1] ?? value.trim(); }
+
 export function slug(value: string): string {
   return safeName(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }

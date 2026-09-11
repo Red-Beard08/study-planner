@@ -2,10 +2,10 @@
 
 import { Notice, Plugin, TFile } from "obsidian";
 import { DASHBOARD_VIEW, StudyDashboardView } from "./dashboard";
-import { AttendanceModal, GoalManagerModal, GoalModal, MeetingModal, MemberEditModal, MemberManagerModal, MemberModal, PersonModal, RescheduleModal, SchedulePickerModal, SeasonModal } from "./modals";
+import { AttendanceModal, GoalEditModal, GoalManagerModal, GoalModal, MeetingModal, MemberEditModal, MemberManagerModal, MemberModal, PersonModal, RescheduleModal, SchedulePickerModal, SeasonModal, TeacherEditModal, TeacherManagerModal } from "./modals";
 import { StudyRepository } from "./repository";
 import { PlannerSettingTab } from "./settings";
-import { DEFAULT_SETTINGS, type MeetingKind, type MeetingRecord, type MemberRecord, type PlannerSettings } from "./types";
+import { DEFAULT_SETTINGS, type GoalRecord, type MeetingKind, type MeetingRecord, type MemberRecord, type PlannerSettings, type TeacherRecord } from "./types";
 import { todayIso } from "./utils";
 
 export default class StudyPlannerPlugin extends Plugin {
@@ -27,7 +27,10 @@ export default class StudyPlannerPlugin extends Plugin {
     this.addCommand({ id: "add-member", name: "Add roster member", callback: () => this.openMember() });
     this.addCommand({ id: "manage-members", name: "Manage members", callback: () => this.openMemberManager() });
     this.addCommand({ id: "open-members-report", name: "Open members report", callback: () => void this.openMembersReport() });
+    this.addCommand({ id: "refresh-active-season-plan", name: "Refresh active season plan", callback: () => void this.openSeasonPlan() });
     this.addCommand({ id: "add-teacher", name: "Add teacher", callback: () => this.openTeacher() });
+    this.addCommand({ id: "manage-teachers", name: "Manage leaders", callback: () => this.openTeacherManager() });
+    this.addCommand({ id: "refresh-leader-goal-summaries", name: "Refresh leader and goal summaries", callback: () => void this.refreshLeaderGoalSummaries() });
     this.addCommand({ id: "add-season-goal", name: "Add season goal", callback: () => this.openGoal() });
     this.addCommand({ id: "manage-season-goals", name: "Manage season goals", callback: () => this.openGoalManager() });
     this.addCommand({ id: "rebuild-summaries", name: "Rebuild season summaries", callback: async () => { await this.repository.rebuildAll(); new Notice("Season summaries rebuilt."); await this.refreshDashboard(); } });
@@ -52,8 +55,17 @@ export default class StudyPlannerPlugin extends Plugin {
     new MemberManagerModal(this.app, this.repository.getMemberReport(), member => void this.openFile(member.path), member => this.openMemberEditor(member), async (member, active) => this.run(active ? "Member marked active." : "Member marked inactive.", async () => { await this.repository.setMemberStatus(member.path, active); await this.repository.rebuildAll(); })).open();
   }
   openMemberEditor(member: MemberRecord): void { new MemberEditModal(this.app, member, async input => this.run("Member details updated.", async () => { await this.repository.updateMember(member.path, input); await this.repository.rebuildAll(); })).open(); }
-  async openMembersReport(): Promise<void> { await this.run("Members report updated.", async () => { const file = await this.repository.rebuildMembersReport(); await this.openFile(file.path); }); }
-  openTeacher(): void { new PersonModal(this.app, "Add teacher", async input => this.run("Teacher added.", async () => { await this.repository.createTeacher(input); })).open(); }
+  async openMembersReport(): Promise<void> { await this.run("Members report refreshed.", async () => { await this.repository.rebuildAll(); const file = this.app.vault.getAbstractFileByPath(this.repository.membersReportPath); if (file instanceof TFile) await this.openFile(file.path); else throw new Error("Members Report could not be created."); }); }
+  async openSeasonPlan(seasonId?: string): Promise<void> {
+    const season = seasonId ? this.repository.getSeasons().find(item => item.id === seasonId) : this.repository.activeSeason();
+    if (!season) { new Notice("Create a study season first."); this.openSeason(); return; }
+    await this.run("Season plan refreshed.", async () => { await this.repository.rebuildSeasonSummary(season.id); await this.openFile(season.planPath); });
+  }
+  openTeacher(): void { new PersonModal(this.app, "Add leader", this.repository.getFocusAreas(), async input => this.run("Leader added.", async () => { await this.repository.createTeacher(input); await this.repository.rebuildAll(); })).open(); }
+  openTeacherManager(): void { new TeacherManagerModal(this.app, this.repository.getTeachers(), teacher => void this.openTeacherProfile(teacher), teacher => this.openTeacherEditor(teacher), async (teacher, active) => this.run(active ? "Leader marked active." : "Leader marked inactive.", async () => { await this.repository.updateTeacher(teacher.path, { name: teacher.name, strengths: teacher.strengths, status: active ? "active" : "inactive" }); await this.repository.rebuildAll(); })).open(); }
+  openTeacherEditor(teacher: TeacherRecord): void { new TeacherEditModal(this.app, teacher, this.repository.getFocusAreas(), async input => this.run("Leader updated.", async () => { await this.repository.updateTeacher(teacher.path, input); await this.repository.rebuildAll(); })).open(); }
+  async openTeacherProfile(teacher: TeacherRecord): Promise<void> { await this.run("Leader profile refreshed.", async () => { await this.repository.rebuildTeacherProfiles(); await this.openFile(teacher.path); }); }
+  async refreshLeaderGoalSummaries(): Promise<void> { await this.run("Leader and goal summaries refreshed.", async () => { await this.repository.rebuildTeacherProfiles(); await this.repository.rebuildGoalProfiles(); for (const season of this.repository.getSeasons()) await this.repository.rebuildSeasonSummary(season.id); }); }
 
   async openMeeting(date?: string, seasonId?: string, kind: MeetingKind = "recurring"): Promise<void> {
     const summary = await this.repository.dashboard(seasonId);
@@ -61,7 +73,7 @@ export default class StudyPlannerPlugin extends Plugin {
     if (kind === "recurring" && !date) { this.openRecurringMeetingPicker(summary.season.id); return; }
     const plannedDate = date || todayIso();
     if (!plannedDate) { new Notice("No remaining recurring dates in this season."); return; }
-    new MeetingModal(this.app, summary.season, plannedDate, kind, summary.teachers, async input => this.run(kind === "specific" ? "Specific event created." : "Lesson created.", async () => { const file = await this.repository.createMeeting(input); await this.repository.rebuildSeasonSummary(summary.season!.id); await this.openFile(file.path); })).open();
+    new MeetingModal(this.app, summary.season, plannedDate, kind, summary.teachers, summary.goals, async input => this.run(kind === "specific" ? "Specific event created." : "Lesson created.", async () => { const file = await this.repository.createMeeting(input); await this.repository.rebuildAll(); await this.openFile(file.path); })).open();
   }
 
   openRecurringMeetingPicker(seasonId?: string): void {
@@ -72,21 +84,24 @@ export default class StudyPlannerPlugin extends Plugin {
 
   openGoal(seasonId?: string): void {
     const season = seasonId ? this.repository.getSeasons().find(item => item.id === seasonId) : this.repository.activeSeason(); if (!season) { new Notice("Create a study season first."); return; }
-    new GoalModal(this.app, season.id, async input => this.run("Season goal created.", async () => { await this.repository.createGoal(input); await this.repository.rebuildSeasonSummary(season.id); })).open();
+    new GoalModal(this.app, season.id, this.repository.getFocusAreas(), async input => this.run("Season goal created.", async () => { await this.repository.createGoal(input); await this.repository.rebuildAll(); })).open();
   }
 
   openGoalManager(seasonId?: string): void {
     const season = seasonId ? this.repository.getSeasons().find(item => item.id === seasonId) : this.repository.activeSeason(); if (!season) { new Notice("Create a study season first."); return; }
     const goals = this.repository.getGoals(season.id);
-    new GoalManagerModal(this.app, goals, goal => void this.openFile(goal.path), async (goal, complete, note) => this.run(complete ? "Goal completed." : "Goal reopened.", async () => {
+    new GoalManagerModal(this.app, goals, goal => void this.openGoalProfile(goal), goal => this.openGoalEditor(goal), async (goal, complete, note) => this.run(complete ? "Goal completed." : "Goal reopened.", async () => {
       const meeting = [...this.repository.getMeetings(season.id)].filter(item => item.status === "completed").sort((a, b) => b.date.localeCompare(a.date))[0];
       await this.repository.updateGoal(goal.path, complete, note, meeting?.path); await this.repository.rebuildSeasonSummary(season.id);
     })).open();
   }
+  openGoalEditor(goal: GoalRecord): void { new GoalEditModal(this.app, goal, this.repository.getFocusAreas(), async input => this.run("Goal updated.", async () => { await this.repository.updateGoalDetails(goal.path, input); await this.repository.rebuildAll(); })).open(); }
+  async openGoalProfile(goal: GoalRecord): Promise<void> { await this.run("Goal profile refreshed.", async () => { await this.repository.rebuildGoalProfiles(); await this.openFile(goal.path); }); }
 
   openAttendance(meeting: MeetingRecord): void {
-    new AttendanceModal(this.app, this.repository.getMembers(), meeting.attendance, meeting.guests, async (attendance, guests) => this.run("Attendance saved.", async () => {
-      await this.repository.recordAttendance(meeting.path, attendance, guests); await this.repository.rebuildSeasonSummary(meeting.seasonId);
+    const leaders = (["primary", "supporting"] as const).map(role => this.repository.teacherForMeeting(meeting, role)).filter((teacher): teacher is TeacherRecord => Boolean(teacher));
+    new AttendanceModal(this.app, this.repository.getMembers(), leaders, meeting.attendance, meeting.leaderAttendance, meeting.guests, async (attendance, guests, leaderAttendance) => this.run("Attendance saved.", async () => {
+      await this.repository.recordAttendance(meeting.path, attendance, guests, leaderAttendance); await this.repository.rebuildAll();
     })).open();
   }
 

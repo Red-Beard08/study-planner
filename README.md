@@ -48,21 +48,21 @@ Use **Add member** to record a member's name, marital status, whether he has chi
 
 Use **Manage members** to edit details or mark a member active or inactive. Use **Members report** for first attendance, latest attendance, totals, and separate active and inactive reports.
 
-Teachers are separate records. Use **Add teacher** to make someone available in lesson-planning forms.
+Leaders are separate records. Use **Add leader** and **Manage leaders** to record reusable teaching strengths, review upcoming assignments, and open their native profile. A leader profile separates lessons led from explicitly recorded attendance at assigned lessons.
 
 ### Plan meetings
 
-Choose **Plan next meeting** from a season dashboard to select an unplanned recurring date. Enter the lesson title, passage, and teachers.
+Choose **Plan next meeting** from a season dashboard to select an unplanned recurring date. Enter the lesson title, passage, leaders, and any season goals the lesson advances.
 
 Choose **Create specific event/lesson** for an event outside the recurrence. Planned meetings can be opened, rescheduled, cancelled, or completed without losing their original schedule date.
 
 ### Record attendance
 
-Choose **Take attendance** on a meeting. Mark members present, absent, or excused and add optional guests. Saving attendance completes the meeting and rebuilds the season, member, and report summaries from the same structured data.
+Choose **Take attendance** on a meeting. Mark members present, absent, or excused, record the assigned leaders' attendance, and add optional guests. Guest names are normalized, deduplicated, and saved as linked member profiles with `member_type: guest`; existing profiles are reused when the name matches. Saving attendance completes the meeting and rebuilds the season, member, leader, goal, and report summaries from the same structured data.
 
 ### Track goals
 
-Use **Add goal** for a season outcome and optional target date. **Manage goals** completes, reopens, and records progress notes for existing goals.
+Use **Add goal** for a season outcome, optional target date, and reusable focus areas. Matching leader strengths appear as suggestions on the generated goal profile. **Manage goals** edits focus areas, completes, reopens, and records progress notes for existing goals.
 
 ## Generated files
 

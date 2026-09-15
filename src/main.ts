@@ -1,6 +1,7 @@
 /* Plugin entry point registering the dashboard, commands, forms, and refresh events. */
 
 import { Notice, Plugin, TFile } from "obsidian";
+import { registerDashboardModule, registerDashboardWidget } from "./dashboard-bridge";
 import { DASHBOARD_VIEW, StudyDashboardView } from "./dashboard";
 import { AttendanceModal, GoalEditModal, GoalManagerModal, GoalModal, MeetingModal, MemberEditModal, MemberManagerModal, MemberModal, PersonModal, RescheduleModal, SchedulePickerModal, SeasonModal, TeacherEditModal, TeacherManagerModal } from "./modals";
 import { StudyRepository } from "./repository";
@@ -139,3 +140,23 @@ export default class StudyPlannerPlugin extends Plugin {
     new Notice(`${prefix}: ${message}`);
   }
 }
+// Red-Beard Dashboard integration: launcher module and independent summary widget.
+const rbDisposals = new WeakMap<object, () => void>();
+const rbOnload = StudyPlannerPlugin.prototype.onload;
+StudyPlannerPlugin.prototype.onload = async function(this: StudyPlannerPlugin) {
+  await rbOnload.call(this);
+  const disposals = [
+    registerDashboardModule(this.app, { id: "study-planner", name: "Study Planner", command: "study-planner:open-dashboard", icon: "book-open-check", description: "Current season, lessons, and attendance.", order: 20 }),
+    registerDashboardWidget(this.app, { id: "study-planner/overview", name: "Study Planner", description: "Current season, lessons, and attendance.", icon: "book-open-check", defaultLayout: { w: 4, mobileW: 12, h: 2, order: 40 }, mobile: "responsive", render: (_ctx, container) => {
+      container.createEl("p", { text: "Current season, lessons, and attendance." });
+      const button = container.createEl("button", { text: "Open Study Planner" });
+      button.onclick = () => void this.openDashboard();
+    } })
+  ];
+  rbDisposals.set(this, () => disposals.forEach(dispose => dispose()));
+};
+const rbOnunload = StudyPlannerPlugin.prototype.onunload;
+StudyPlannerPlugin.prototype.onunload = function(this: StudyPlannerPlugin) {
+  rbDisposals.get(this)?.();
+ return rbOnunload ? rbOnunload.call(this) : undefined;
+};

@@ -1,6 +1,6 @@
 /* Plugin entry point registering the dashboard, commands, forms, and refresh events. */
 
-import { Notice, Plugin, TFile } from "obsidian";
+import { App, Notice, Plugin, TFile } from "obsidian";
 import { registerDashboardModule, registerDashboardWidget } from "./dashboard-bridge";
 import { DASHBOARD_VIEW, StudyDashboardView } from "./dashboard";
 import { AttendanceModal, GoalEditModal, GoalManagerModal, GoalModal, MeetingModal, MemberEditModal, MemberManagerModal, MemberModal, PersonModal, RescheduleModal, SchedulePickerModal, SeasonModal, TeacherEditModal, TeacherManagerModal } from "./modals";
@@ -8,6 +8,15 @@ import { StudyRepository } from "./repository";
 import { PlannerSettingTab } from "./settings";
 import { DEFAULT_SETTINGS, type GoalRecord, type MeetingKind, type MeetingRecord, type MemberRecord, type PlannerSettings, type TeacherRecord } from "./types";
 import { todayIso } from "./utils";
+
+function dashboardCommand(app: App): string {
+  const current = "study-planner:open-dashboard";
+  const commandApi = (app as App & { commands?: { commands?: Record<string, { name?: string }> } }).commands;
+  const alternate = Object.keys(commandApi?.commands ?? {}).find(id =>
+    id !== current && id.endsWith(":open-dashboard") && /study[- ]planner/i.test(`${id} ${commandApi?.commands?.[id]?.name ?? ""}`)
+  );
+  return alternate ?? current;
+}
 
 export default class StudyPlannerPlugin extends Plugin {
   settings: PlannerSettings = DEFAULT_SETTINGS;
@@ -146,11 +155,15 @@ const rbOnload = StudyPlannerPlugin.prototype.onload;
 StudyPlannerPlugin.prototype.onload = async function(this: StudyPlannerPlugin) {
   await rbOnload.call(this);
   const disposals = [
-    registerDashboardModule(this.app, { id: "study-planner", name: "Study Planner", command: "study-planner:open-dashboard", icon: "book-open-check", description: "Current season, lessons, and attendance.", order: 20 }),
+    registerDashboardModule(this.app, { id: "study-planner", name: "Study Planner", command: dashboardCommand(this.app), icon: "book-open-check", description: "Current season, lessons, and attendance.", order: 20 }),
     registerDashboardWidget(this.app, { id: "study-planner/overview", name: "Study Planner", description: "Current season, lessons, and attendance.", icon: "book-open-check", defaultLayout: { w: 4, mobileW: 12, h: 2, order: 40 }, mobile: "responsive", render: (_ctx, container) => {
       container.createEl("p", { text: "Current season, lessons, and attendance." });
       const button = container.createEl("button", { text: "Open Study Planner" });
-      button.onclick = () => void this.openDashboard();
+      button.onclick = () => {
+        const commandId = dashboardCommand(this.app);
+        const commands = (this.app as typeof this.app & { commands?: { executeCommandById?: (id: string) => boolean } }).commands;
+        if (!commands?.executeCommandById?.(commandId)) void this.openDashboard();
+      };
     } })
   ];
   rbDisposals.set(this, () => disposals.forEach(dispose => dispose()));
